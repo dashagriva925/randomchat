@@ -769,3 +769,97 @@ async function joinWaitingQueue() {
         );
     }
                          }
+// ==========================
+// WEBRTC VIDEO CONNECTION
+// ==========================
+
+let peerConnection = null;
+let roomId = null;
+let isCaller = false;
+
+const remoteVideo = document.getElementById("remoteVideo");
+
+const rtcConfig = {
+    iceServers: [
+        {
+            urls: "stun:stun.l.google.com:19302"
+        }
+    ]
+};
+
+function createPeerConnection() {
+
+    peerConnection = new RTCPeerConnection(rtcConfig);
+
+    // Send our camera/audio tracks
+    if (localStream) {
+        localStream.getTracks().forEach(function(track) {
+            peerConnection.addTrack(
+                track,
+                localStream
+            );
+        });
+    }
+
+    // Receive stranger's camera/audio
+    peerConnection.ontrack = function(event) {
+
+        console.log("Remote stream received");
+
+        if (remoteVideo) {
+
+            remoteVideo.srcObject =
+                event.streams[0];
+
+            remoteVideo.style.display =
+                "block";
+
+            remoteVideo.play().catch(
+                function(error) {
+                    console.log(
+                        "Remote video play error:",
+                        error
+                    );
+                }
+            );
+        }
+
+        if (connectionStatus) {
+            connectionStatus.textContent =
+                "● Connected";
+        }
+
+        if (matchStatus) {
+            matchStatus.textContent =
+                "Stranger connected!";
+        }
+
+        if (matchSubtext) {
+            matchSubtext.textContent =
+                "You are now chatting.";
+        }
+    };
+
+    // Send ICE candidates through Supabase
+    peerConnection.onicecandidate =
+        async function(event) {
+
+            if (!event.candidate) {
+                return;
+            }
+
+            if (!roomId || !matchedUserId) {
+                return;
+            }
+
+            await supabaseClient
+                .from("signaling")
+                .insert({
+                    room_id: roomId,
+                    sender_id: myUserId,
+                    receiver_id: matchedUserId,
+                    type: "ice",
+                    data: event.candidate.toJSON()
+                });
+        };
+}

@@ -863,3 +863,134 @@ function createPeerConnection() {
                 });
         };
 }
+// ==========================
+// WEBRTC SIGNALING
+// ==========================
+
+function startSignaling() {
+
+    if (!roomId) {
+        console.error("No room ID");
+        return;
+    }
+
+    supabaseClient
+        .channel("signaling-" + myUserId)
+        .on(
+            "postgres_changes",
+            {
+                event: "INSERT",
+                schema: "public",
+                table: "signaling",
+                filter: "receiver_id=eq." + myUserId
+            },
+            async function (payload) {
+
+                const signal = payload.new;
+
+                console.log(
+                    "Received signal:",
+                    signal.type
+                );
+
+                if (!peerConnection) {
+                    createPeerConnection();
+                }
+
+                if (signal.type === "offer") {
+
+                    await peerConnection.setRemoteDescription(
+                        new RTCSessionDescription(
+                            signal.data
+                        )
+                    );
+
+                    const answer =
+                        await peerConnection.createAnswer();
+
+                    await peerConnection.setLocalDescription(
+                        answer
+                    );
+
+                    await supabaseClient
+                        .from("signaling")
+                        .insert({
+                            room_id: roomId,
+                            sender_id: myUserId,
+                            receiver_id: signal.sender_id,
+                            type: "answer",
+                            data: answer
+                        });
+                }
+
+                else if (signal.type === "answer") {
+
+                    await peerConnection.setRemoteDescription(
+                        new RTCSessionDescription(
+                            signal.data
+                        )
+                    );
+                }
+
+                else if (signal.type === "ice") {
+
+                    try {
+
+                        await peerConnection.addIceCandidate(
+                            new RTCIceCandidate(
+                                signal.data
+                            )
+                        );
+
+                    } catch (error) {
+
+                        console.error(
+                            "ICE error:",
+                            error
+                        );
+                    }
+                }
+            }
+        )
+        .subscribe(function (status) {
+
+            console.log(
+                "Signaling channel:",
+                status
+            );
+
+        });
+}
+
+
+// ==========================
+// CREATE OFFER
+// ==========================
+
+async function createOffer() {
+
+    if (!peerConnection) {
+        createPeerConnection();
+    }
+
+    const offer =
+        await peerConnection.createOffer();
+
+    await peerConnection.setLocalDescription(
+        offer
+    );
+
+    await supabaseClient
+        .from("signaling")
+        .insert({
+            room_id: roomId,
+            sender_id: myUserId,
+            receiver_id: matchedUserId,
+            type: "offer",
+            data: offer
+        });
+
+    console.log(
+        "WebRTC offer sent"
+    );
+}

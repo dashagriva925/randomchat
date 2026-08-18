@@ -1,22 +1,45 @@
 // @ts-nocheck
 "use strict";
 
-console.log("RandomChat script loaded");
+console.log("RandomChat script started");
 
 // ==========================
 // SUPABASE
 // ==========================
 
-const SUPABASE_URL = "https://nldvjwtfpcsfftddupwk.supabase.co";
+const SUPABASE_URL =
+    "https://nldvjwtfpcsfftddupwk.supabase.co";
 
 const SUPABASE_KEY =
     "sb_publishable_KXpzc2iNjLjAU83LM2XlNQ_PZarkf1L";
 
-const supabaseClient =
-    window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_KEY
+let supabaseClient = null;
+
+if (window.supabase) {
+
+    supabaseClient =
+        window.supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_KEY
+        );
+
+    console.log("Supabase initialized");
+
+} else {
+
+    console.error(
+        "Supabase library not loaded"
     );
+}
+
+
+// ==========================
+// VARIABLES
+// ==========================
+
+let localStream = null;
+let isMuted = false;
+let isCameraOff = false;
 
 
 // ==========================
@@ -74,78 +97,9 @@ const cameraBtn =
 const stopBtn =
     document.getElementById("stopBtn");
 
-
+console.log("Elements loaded");
 // ==========================
-// VARIABLES
-// ==========================
-
-let localStream = null;
-
-let peerConnection = null;
-
-let matchedUserId = null;
-
-let roomId = null;
-
-let isMuted = false;
-
-let isCameraOff = false;
-
-let isSearching = false;
-
-let queueChannel = null;
-
-let signalingChannel = null;
-
-let chatChannel = null;
-
-
-// ==========================
-// USER ID
-// ==========================
-
-let myUserId =
-    localStorage.getItem(
-        "randomchat_user_id"
-    );
-
-if (!myUserId) {
-
-    myUserId =
-        crypto.randomUUID();
-
-    localStorage.setItem(
-        "randomchat_user_id",
-        myUserId
-    );
-}
-
-
-// ==========================
-// WEBRTC SETTINGS
-// ==========================
-
-const rtcConfig = {
-
-    iceServers: [
-
-        {
-            urls:
-                "stun:stun.l.google.com:19302"
-        },
-
-        {
-            urls:
-                "stun:stun1.l.google.com:19302"
-        }
-
-    ]
-
-};
-
-
-// ==========================
-// MESSAGES
+// SYSTEM MESSAGE
 // ==========================
 
 function addSystemMessage(text) {
@@ -158,8 +112,7 @@ function addSystemMessage(text) {
     message.className =
         "system-message";
 
-    message.textContent =
-        text;
+    message.textContent = text;
 
     messages.appendChild(message);
 
@@ -167,6 +120,10 @@ function addSystemMessage(text) {
         messages.scrollHeight;
 }
 
+
+// ==========================
+// USER MESSAGE
+// ==========================
 
 function addUserMessage(text) {
 
@@ -178,8 +135,7 @@ function addUserMessage(text) {
     message.className =
         "user-message";
 
-    message.textContent =
-        text;
+    message.textContent = text;
 
     messages.appendChild(message);
 
@@ -189,1142 +145,351 @@ function addUserMessage(text) {
 
 
 // ==========================
-// STATUS
+// START CHAT
 // ==========================
 
-function setStatus(
-    status,
-    subtext,
-    connection
-) {
+if (startBtn) {
+
+    startBtn.addEventListener(
+        "click",
+        async function () {
+
+            console.log(
+                "START BUTTON CLICKED"
+            );
+
+            // Hide home screen
+            if (hero) {
+                hero.style.display =
+                    "none";
+            }
+
+            // Show chat screen
+            if (chatContainer) {
+
+                chatContainer.classList.add(
+                    "active"
+                );
+
+                chatContainer.style.display =
+                    "flex";
+            }
+
+            if (matchStatus) {
+                matchStatus.textContent =
+                    "Opening camera...";
+            }
+
+            if (matchSubtext) {
+                matchSubtext.textContent =
+                    "Please allow camera and microphone.";
+            }
+
+            if (connectionStatus) {
+                connectionStatus.textContent =
+                    "● Starting";
+            }
+
+            try {
+
+                if (
+                    !navigator.mediaDevices ||
+                    !navigator.mediaDevices.getUserMedia
+                ) {
+
+                    throw new Error(
+                        "Camera access is not supported by this browser."
+                    );
+                }
+
+                console.log(
+                    "Requesting camera permission..."
+                );
+
+                localStream =
+                    await navigator.mediaDevices
+                        .getUserMedia({
+                            video: true,
+                            audio: true
+                        });
+
+                console.log(
+                    "Camera permission granted"
+                );
+
+                // Show local camera
+                if (localVideo) {
+
+                    localVideo.srcObject =
+                        localStream;
+
+                    localVideo.style.display =
+                        "block";
+
+                    localVideo.style.width =
+                        "100%";
+
+                    localVideo.style.height =
+                        "300px";
+
+                    localVideo.style.objectFit =
+                        "cover";
+
+                    try {
+
+                        await localVideo.play();
+
+                    } catch (videoError) {
+
+                        console.log(
+                            "Video autoplay:",
+                            videoError
+                        );
+                    }
+                }
+
+                // Hide camera placeholder
+                if (localPlaceholder) {
+
+                    localPlaceholder.style.display =
+                        "none";
+                }
+
+                // Update status
+                if (matchStatus) {
+
+                    matchStatus.textContent =
+                        "Camera is working";
+                }
+
+                if (matchSubtext) {
+
+                    matchSubtext.textContent =
+                        "Waiting for a stranger...";
+                }
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Camera connected";
+                }
+
+                addSystemMessage(
+                    "Camera and microphone connected."
+                );
+
+                addSystemMessage(
+                    "Waiting for a stranger..."
+                );
+
+                startWaiting();
+
+            } catch (error) {
+
+                console.error(
+                    "CAMERA ERROR:",
+                    error
+                );
+
+                if (matchStatus) {
+
+                    matchStatus.textContent =
+                        "Camera error";
+                }
+
+                if (matchSubtext) {
+
+                    matchSubtext.textContent =
+                        error.name +
+                        ": " +
+                        error.message;
+                }
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Camera unavailable";
+                }
+
+                alert(
+                    "Camera could not start.\n\n" +
+                    error.name +
+                    "\n" +
+                    error.message
+                );
+            }
+        }
+    );
+
+} else {
+
+    console.error(
+        "ERROR: startBtn not found"
+    );
+}
+
+
+// ==========================
+// WAITING
+// ==========================
+
+function startWaiting() {
+
+    console.log(
+        "Waiting for stranger..."
+    );
 
     if (matchStatus) {
 
         matchStatus.textContent =
-            status;
+            "Waiting for a stranger...";
     }
 
     if (matchSubtext) {
 
         matchSubtext.textContent =
-            subtext;
+            "Keep this page open.";
     }
 
     if (connectionStatus) {
 
         connectionStatus.textContent =
-            connection;
+            "● Waiting";
     }
-}
-
-
-// ==========================
-// CAMERA
-// ==========================
-
-async function startCamera() {
-
-    localStream =
-        await navigator.mediaDevices.getUserMedia({
-
-            video: true,
-
-            audio: true
-
-        });
-
-
-    if (localVideo) {
-
-        localVideo.srcObject =
-            localStream;
-
-        localVideo.style.display =
-            "block";
-
-        localVideo.style.width =
-            "100%";
-
-        localVideo.style.height =
-            "300px";
-
-        localVideo.style.objectFit =
-            "cover";
-
-        await localVideo.play()
-            .catch(() => {});
-    }
-
-
-    if (localPlaceholder) {
-
-        localPlaceholder.style.display =
-            "none";
-    }
-
-
-    isMuted = false;
-
-    isCameraOff = false;
-
-
-    if (micBtn) {
-
-        micBtn.innerHTML =
-            "🎤 <span>Mute</span>";
-    }
-
-
-    if (cameraBtn) {
-
-        cameraBtn.innerHTML =
-            "📷 <span>Camera</span>";
-    }
-}
-
-
-// ==========================
-// STOP CAMERA
-// ==========================
-
-function stopCamera() {
-
-    if (localStream) {
-
-        localStream
-            .getTracks()
-            .forEach(
-                track => track.stop()
-            );
-    }
-
-
-    localStream = null;
-
-
-    if (localVideo) {
-
-        localVideo.srcObject =
-            null;
-
-        localVideo.style.display =
-            "none";
-    }
-
-
-    if (localPlaceholder) {
-
-        localPlaceholder.style.display =
-            "flex";
-    }
-}
-
-
-// ==========================
-// CLOSE PEER
-// ==========================
-
-function closePeerConnection() {
-
-    if (peerConnection) {
-
-        peerConnection.close();
-
-        peerConnection = null;
-    }
-
-
-    if (remoteVideo) {
-
-        remoteVideo.srcObject =
-            null;
-
-        remoteVideo.style.display =
-            "none";
-    }
-
-
-    if (remotePlaceholder) {
-
-        remotePlaceholder.style.display =
-            "flex";
-    }
-}
-
-
-// ==========================
-// CREATE PEER CONNECTION
-// ==========================
-
-function createPeerConnection() {
-
-    if (peerConnection) {
-
-        return peerConnection;
-    }
-
-
-    peerConnection =
-        new RTCPeerConnection(
-            rtcConfig
-        );
-
-
-    // Add our camera and microphone
-
-    if (localStream) {
-
-        localStream
-            .getTracks()
-            .forEach(track => {
-
-                peerConnection.addTrack(
-                    track,
-                    localStream
-                );
-
-            });
-    }
-
-
-    // Receive stranger video
-
-    peerConnection.ontrack =
-        function(event) {
-
-            console.log(
-                "Remote stream received"
-            );
-
-
-            if (!remoteVideo) {
-
-                return;
-            }
-
-
-            remoteVideo.srcObject =
-                event.streams[0];
-
-            remoteVideo.style.display =
-                "block";
-
-
-            if (remotePlaceholder) {
-
-                remotePlaceholder.style.display =
-                    "none";
-            }
-
-
-            remoteVideo
-                .play()
-                .catch(() => {});
-
-
-            setStatus(
-
-                "Stranger connected!",
-
-                "You are now chatting.",
-
-                "● Connected"
-
-            );
-        };
-
-
-    // Send ICE candidate
-
-    peerConnection.onicecandidate =
-        async function(event) {
-
-            if (!event.candidate) {
-
-                return;
-            }
-
-
-            if (
-                !roomId ||
-                !matchedUserId
-            ) {
-
-                return;
-            }
-
-
-            const { error } =
-                await supabaseClient
-                    .from("signaling")
-                    .insert({
-
-                        room_id:
-                            roomId,
-
-                        sender_id:
-                            myUserId,
-
-                        receiver_id:
-                            matchedUserId,
-
-                        type:
-                            "ice",
-
-                        data:
-                            event.candidate
-                                .toJSON()
-
-                    });
-
-
-            if (error) {
-
-                console.error(
-                    "ICE error:",
-                    error
-                );
-            }
-        };
-
-
-    // Connection state
-
-    peerConnection
-        .onconnectionstatechange =
-        function() {
-
-            if (!peerConnection) {
-
-                return;
-            }
-
-
-            console.log(
-                "WebRTC:",
-                peerConnection
-                    .connectionState
-            );
-
-
-            if (
-                peerConnection
-                    .connectionState ===
-                "connected"
-            ) {
-
-                setStatus(
-
-                    "Stranger connected!",
-
-                    "You are now chatting.",
-
-                    "● Connected"
-
-                );
-            }
-
-
-            if (
-                peerConnection
-                    .connectionState ===
-                "failed"
-            ) {
-
-                setStatus(
-
-                    "Connection failed",
-
-                    "Press Next to try again.",
-
-                    "● Connection failed"
-
-                );
-            }
-        };
-
-
-    return peerConnection;
-}
-
-
-// ==========================
-// ROOM ID
-// ==========================
-
-function createRoomId(
-    user1,
-    user2
-) {
-
-    return [
-        user1,
-        user2
-    ]
-        .sort()
-        .join("_");
-}
-
-
-// ==========================
-// SEND SIGNAL
-// ==========================
-
-async function sendSignal(
-    type,
-    data
-) {
-
-    if (
-        !roomId ||
-        !matchedUserId
-    ) {
-
-        return;
-    }
-
-
-    const { error } =
-        await supabaseClient
-            .from("signaling")
-            .insert({
-
-                room_id:
-                    roomId,
-
-                sender_id:
-                    myUserId,
-
-                receiver_id:
-                    matchedUserId,
-
-                type:
-                    type,
-
-                data:
-                    data
-
-            });
-
-
-    if (error) {
-
-        console.error(
-            "Signal error:",
-            error
-        );
-    }
-}
-
-
-// ==========================
-// CREATE OFFER
-// ==========================
-
-async function createOffer() {
-
-    const pc =
-        createPeerConnection();
-
-
-    const offer =
-        await pc.createOffer();
-
-
-    await pc.setLocalDescription(
-        offer
-    );
-
-
-    await sendSignal(
-        "offer",
-        {
-
-            type:
-                offer.type,
-
-            sdp:
-                offer.sdp
-
-        }
-    );
-
-
-    console.log(
-        "Offer sent"
-    );
-}
-
-
-// ==========================
-// SIGNALING
-// ==========================
-
-function startSignaling() {
-
-    if (signalingChannel) {
-
-        supabaseClient
-            .removeChannel(
-                signalingChannel
-            );
-    }
-
-
-    signalingChannel =
-        supabaseClient
-
-            .channel(
-                "signaling-" +
-                myUserId
-            )
-
-            .on(
-
-                "postgres_changes",
-
-                {
-
-                    event:
-                        "INSERT",
-
-                    schema:
-                        "public",
-
-                    table:
-                        "signaling",
-
-                    filter:
-                        "receiver_id=eq." +
-                        myUserId
-
-                },
-
-                async function(payload) {
-
-                    const signal =
-                        payload.new;
-
-
-                    if (!signal) {
-
-                        return;
                     }
 
+// ==========================
+// SENDER ID
+// ==========================
 
-                    if (
-                        signal.room_id !==
-                        roomId
-                    ) {
+function getSenderId() {
 
-                        return;
-                    }
+    let senderId =
+        localStorage.getItem(
+            "randomchat_sender_id"
+        );
 
+    if (!senderId) {
 
-                    const pc =
-                        createPeerConnection();
+        senderId =
+            crypto.randomUUID();
 
+        localStorage.setItem(
+            "randomchat_sender_id",
+            senderId
+        );
+    }
 
-                    try {
-
-                        // OFFER
-
-                        if (
-                            signal.type ===
-                            "offer"
-                        ) {
-
-                            await pc
-                                .setRemoteDescription(
-
-                                    new RTCSessionDescription(
-                                        signal.data
-                                    )
-
-                                );
-
-
-                            const answer =
-                                await pc
-                                    .createAnswer();
-
-
-                            await pc
-                                .setLocalDescription(
-                                    answer
-                                );
-
-
-                            await sendSignal(
-                                "answer",
-                                {
-
-                                    type:
-                                        answer.type,
-
-                                    sdp:
-                                        answer.sdp
-
-                                }
-                            );
-                        }
-
-
-                        // ANSWER
-
-                        else if (
-                            signal.type ===
-                            "answer"
-                        ) {
-
-                            await pc
-                                .setRemoteDescription(
-
-                                    new RTCSessionDescription(
-                                        signal.data
-                                    )
-
-                                );
-                        }
-
-
-                        // ICE
-
-                        else if (
-                            signal.type ===
-                            "ice"
-                        ) {
-
-                            await pc
-                                .addIceCandidate(
-
-                                    new RTCIceCandidate(
-                                        signal.data
-                                    )
-
-                                );
-                        }
-
-                    }
-                    catch(error) {
-
-                        console.error(
-                            "Signal handling error:",
-                            error
-                        );
-                    }
-
-                }
-
-            )
-
-            .subscribe(
-                function(status) {
-
-                    console.log(
-                        "Signaling:",
-                        status
-                    );
-
-                }
-            );
+    return senderId;
 }
 
 
 // ==========================
-// REMOVE FROM QUEUE
+// REAL-TIME CHAT
 // ==========================
 
-async function removeFromQueue() {
+let chatChannel = null;
 
-    const { error } =
-        await supabaseClient
-            .from("waiting_users")
-            .delete()
-            .eq(
-                "user_id",
-                myUserId
-            );
+function createChatChannel() {
 
-
-    if (error) {
+    if (!supabaseClient) {
 
         console.error(
-            "Queue delete:",
-            error
-        );
-    }
-}
-
-
-// ==========================
-// FIND WAITING USER
-// ==========================
-
-async function findWaitingUser() {
-
-    if (
-        !isSearching ||
-        matchedUserId
-    ) {
-
-        return;
-    }
-
-
-    const { data, error } =
-        await supabaseClient
-
-            .from("waiting_users")
-
-            .select(
-                "user_id, created_at"
-            )
-
-            .neq(
-                "user_id",
-                myUserId
-            )
-
-            .order(
-                "created_at",
-                {
-                    ascending: true
-                }
-            )
-
-            .limit(1);
-
-
-    if (error) {
-
-        console.error(
-            "Queue search:",
-            error
+            "Supabase is not available"
         );
 
         return;
     }
-
-
-    // Someone waiting
-
-    if (
-        data &&
-        data.length > 0
-    ) {
-
-        const stranger =
-            data[0];
-
-
-        matchedUserId =
-            stranger.user_id;
-
-
-        roomId =
-            createRoomId(
-                myUserId,
-                matchedUserId
-            );
-
-
-        isSearching =
-            false;
-
-
-        await supabaseClient
-
-            .from("waiting_users")
-
-            .delete()
-
-            .eq(
-                "user_id",
-                matchedUserId
-            );
-
-
-        await removeFromQueue();
-
-
-        setStatus(
-
-            "Stranger found!",
-
-            "Connecting...",
-
-            "● Stranger found"
-
-        );
-
-
-        addSystemMessage(
-            "🎉 Stranger found! Connecting..."
-        );
-
-
-        startSignaling();
-
-
-        createPeerConnection();
-
-
-        // Only one person creates offer
-
-        if (
-            myUserId <
-            matchedUserId
-        ) {
-
-            await createOffer();
-        }
-
-
-        return;
-    }
-
-
-    // Nobody waiting
-
-    await joinQueue();
-}
-
-
-// ==========================
-// JOIN QUEUE
-// ==========================
-
-async function joinQueue() {
-
-    if (
-        !isSearching ||
-        matchedUserId
-    ) {
-
-        return;
-    }
-
-
-    const { data, error } =
-        await supabaseClient
-
-            .from("waiting_users")
-
-            .select("user_id")
-
-            .eq(
-                "user_id",
-                myUserId
-            );
-
-
-    if (error) {
-
-        console.error(
-            "Queue check:",
-            error
-        );
-
-        return;
-    }
-
-
-    if (
-        data &&
-        data.length > 0
-    ) {
-
-        return;
-    }
-
-
-    const { error: insertError } =
-        await supabaseClient
-
-            .from("waiting_users")
-
-            .insert({
-
-                user_id:
-                    myUserId
-
-            });
-
-
-    if (insertError) {
-
-        console.error(
-            "Queue insert:",
-            insertError
-        );
-
-        addSystemMessage(
-            "Could not join waiting queue."
-        );
-
-        return;
-    }
-
-
-    setStatus(
-
-        "Waiting for a stranger...",
-
-        "Keep this page open.",
-
-        "● Waiting"
-
-    );
-
-
-    addSystemMessage(
-        "You are in the waiting queue."
-    );
-}
-
-
-// ==========================
-// QUEUE REALTIME
-// ==========================
-
-function startQueueListener() {
-
-    if (queueChannel) {
-
-        supabaseClient
-            .removeChannel(
-                queueChannel
-            );
-    }
-
-
-    queueChannel =
-        supabaseClient
-
-            .channel(
-                "queue-" +
-                myUserId
-            )
-
-            .on(
-
-                "postgres_changes",
-
-                {
-
-                    event:
-                        "INSERT",
-
-                    schema:
-                        "public",
-
-                    table:
-                        "waiting_users"
-
-                },
-
-                function() {
-
-                    if (
-                        isSearching &&
-                        !matchedUserId
-                    ) {
-
-                        findWaitingUser();
-                    }
-
-                }
-
-            )
-
-            .subscribe(
-                function(status) {
-
-                    console.log(
-                        "Queue:",
-                        status
-                    );
-
-                }
-            );
-}
-
-
-// ==========================
-// START MATCHING
-// ==========================
-
-async function startMatching() {
-
-    isSearching =
-        true;
-
-    matchedUserId =
-        null;
-
-    roomId =
-        null;
-
-
-    startQueueListener();
-
-
-    await findWaitingUser();
-}
-
-
-// ==========================
-// CHAT REALTIME
-// ==========================
-
-
-function startChatRealtime() {
 
     if (chatChannel) {
-
-        supabaseClient
-            .removeChannel(
-                chatChannel
-            );
+        return;
     }
-
 
     chatChannel =
         supabaseClient
-
             .channel(
-                "chat-" +
-                myUserId
+                "randomchat-messages"
             )
-
             .on(
-
                 "postgres_changes",
-
                 {
-
-                    event:
-                        "INSERT",
-
-                    schema:
-                        "public",
-
-                    table:
-                        "chat_messages"
-
+                    event: "INSERT",
+                    schema: "public",
+                    table: "chat_messages"
                 },
+                function (payload) {
 
-                function(payload) {
-
-                    const msg =
+                    const newMessage =
                         payload.new;
 
-
-                    if (!msg) {
-
-                        return;
-                    }
-
-
+                    // Ignore our own message
                     if (
-                        msg.sender_id ===
-                        myUserId
+                        newMessage.sender_id ===
+                        getSenderId()
                     ) {
-
                         return;
                     }
-
-
-                    if (
-                        roomId &&
-                        msg.room_id !==
-                        roomId
-                    ) {
-
-                        return;
-                    }
-
 
                     addUserMessage(
                         "Stranger: " +
-                        msg.message
+                        newMessage.message
                     );
-
                 }
-
             )
-
             .subscribe(
-                function(status) {
+                function (status) {
 
                     console.log(
-                        "Chat:",
+                        "Chat channel:",
                         status
                     );
-
                 }
             );
 }
 
+
 // ==========================
-// SEND CHAT MESSAGE
+// SEND MESSAGE
 // ==========================
 
 async function sendMessage() {
 
     if (!messageInput) {
-
         return;
     }
-
 
     const text =
         messageInput.value.trim();
 
-
-    if (!text) {
-
+    if (text === "") {
         return;
     }
 
-
-    if (
-        !roomId ||
-        !matchedUserId
-    ) {
+    if (!supabaseClient) {
 
         addSystemMessage(
-            "You are not connected to a stranger yet."
+            "Chat service is unavailable."
         );
 
         return;
     }
 
+    const senderId =
+        getSenderId();
 
     const { error } =
         await supabaseClient
-
             .from("chat_messages")
-
             .insert({
-
-                room_id:
-                    roomId,
-
-                sender_id:
-                    myUserId,
-
-                message:
-                    text
-
+                room_id: "test-room",
+                sender_id: senderId,
+                message: text
             });
-
 
     if (error) {
 
         console.error(
-            "Message error:",
+            "Message send error:",
             error
         );
 
@@ -1335,120 +500,9 @@ async function sendMessage() {
         return;
     }
 
+    addUserMessage(text);
 
-    addUserMessage(
-        text
-    );
-
-
-    messageInput.value =
-        "";
-}
-
-
-// ==========================
-// START BUTTON
-// ==========================
-
-if (startBtn) {
-
-    startBtn.addEventListener(
-        "click",
-        async function() {
-
-            if (localStream) {
-
-                return;
-            }
-
-
-            if (hero) {
-
-                hero.style.display =
-                    "none";
-            }
-
-
-            if (chatContainer) {
-
-                chatContainer.classList.add(
-                    "active"
-                );
-            }
-
-
-            setStatus(
-
-                "Opening camera...",
-
-                "Please wait.",
-
-                "● Camera starting"
-
-            );
-
-
-            try {
-
-                await startCamera();
-
-
-                setStatus(
-
-                    "Camera is working",
-
-                    "Looking for a stranger...",
-
-                    "● Camera connected"
-
-                );
-
-
-                addSystemMessage(
-                    "Camera and microphone connected."
-                );
-
-
-                startChatRealtime();
-
-
-                await startMatching();
-
-            }
-            catch(error) {
-
-                console.error(
-                    "Camera error:",
-                    error
-                );
-
-
-                setStatus(
-
-                    "Camera error",
-
-                    error.name +
-                    ": " +
-                    error.message,
-
-                    "● Camera unavailable"
-
-                );
-
-
-                alert(
-
-                    "Camera error:\n\n" +
-                    error.name +
-                    "\n" +
-                    error.message
-
-                );
-            }
-
-        }
-    );
-  
+    messageInput.value = "";
 }
 
 
@@ -1465,25 +519,36 @@ if (sendBtn) {
 }
 
 
+// ==========================
+// ENTER TO SEND
+// ==========================
+
 if (messageInput) {
 
     messageInput.addEventListener(
         "keydown",
-        function(event) {
+        function (event) {
 
-            if (
-                event.key ===
-                "Enter"
-            ) {
+            if (event.key === "Enter") {
+
+                event.preventDefault();
 
                 sendMessage();
             }
-
         }
     );
 }
 
 
+// ==========================
+// START REAL-TIME CHAT
+// ==========================
+
+createChatChannel();
+
+console.log(
+    "Realtime chat initialized"
+);
 // ==========================
 // MICROPHONE
 // ==========================
@@ -1492,24 +557,21 @@ if (micBtn) {
 
     micBtn.addEventListener(
         "click",
-        function() {
+        function () {
 
             if (!localStream) {
 
                 alert(
-                    "Start the camera first."
+                    "Start Chatting first."
                 );
 
                 return;
             }
 
+            const audioTracks =
+                localStream.getAudioTracks();
 
-            const tracks =
-                localStream
-                    .getAudioTracks();
-
-
-            if (!tracks.length) {
+            if (audioTracks.length === 0) {
 
                 alert(
                     "No microphone found."
@@ -1518,71 +580,67 @@ if (micBtn) {
                 return;
             }
 
-
             isMuted =
                 !isMuted;
 
-
-            tracks.forEach(
-                function(track) {
+            audioTracks.forEach(
+                function (track) {
 
                     track.enabled =
                         !isMuted;
-
                 }
             );
 
+            if (isMuted) {
 
-            micBtn.innerHTML =
-                isMuted
+                micBtn.innerHTML =
+                    "🎤 <span>Unmute</span>";
 
-                ? "🎤 <span>Unmute</span>"
+                if (connectionStatus) {
 
-                : "🎤 <span>Mute</span>";
+                    connectionStatus.textContent =
+                        "● Microphone muted";
+                }
 
+            } else {
 
-            connectionStatus.textContent =
-                isMuted
+                micBtn.innerHTML =
+                    "🎤 <span>Mute</span>";
 
-                ? "● Microphone muted"
+                if (connectionStatus) {
 
-                : (
-                    matchedUserId
-                    ? "● Connected"
-                    : "● Waiting"
-                );
-
+                    connectionStatus.textContent =
+                        "● Camera connected";
+                }
+            }
         }
     );
 }
 
 
 // ==========================
-// CAMERA BUTTON
+// CAMERA ON / OFF
 // ==========================
 
 if (cameraBtn) {
 
     cameraBtn.addEventListener(
         "click",
-        function() {
+        function () {
 
             if (!localStream) {
 
                 alert(
-                    "Start the camera first."
+                    "Start Chatting first."
                 );
 
                 return;
             }
 
+            const videoTracks =
+                localStream.getVideoTracks();
 
-            const tracks =
-                localStream
-                    .getVideoTracks();
-
-
-            if (!tracks.length) {
+            if (videoTracks.length === 0) {
 
                 alert(
                     "No camera found."
@@ -1591,109 +649,142 @@ if (cameraBtn) {
                 return;
             }
 
-
             isCameraOff =
                 !isCameraOff;
 
-
-            tracks.forEach(
-                function(track) {
+            videoTracks.forEach(
+                function (track) {
 
                     track.enabled =
                         !isCameraOff;
-
                 }
             );
 
+            if (isCameraOff) {
 
-            cameraBtn.innerHTML =
-                isCameraOff
+                cameraBtn.innerHTML =
+                    "📷 <span>Camera Off</span>";
 
-                ? "📷 <span>Camera Off</span>"
+                if (localVideo) {
 
-                : "📷 <span>Camera</span>";
+                    localVideo.style.display =
+                        "none";
+                }
 
+                if (localPlaceholder) {
 
-            if (localVideo) {
+                    localPlaceholder.style.display =
+                        "flex";
+                }
 
-                localVideo.style.display =
-                    isCameraOff
-                    ? "none"
-                    : "block";
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Camera off";
+                }
+
+            } else {
+
+                cameraBtn.innerHTML =
+                    "📷 <span>Camera</span>";
+
+                if (localVideo) {
+
+                    localVideo.style.display =
+                        "block";
+                }
+
+                if (localPlaceholder) {
+
+                    localPlaceholder.style.display =
+                        "none";
+                }
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Camera connected";
+                }
             }
-
-
-            if (localPlaceholder) {
-
-                localPlaceholder.style.display =
-                    isCameraOff
-                    ? "flex"
-                    : "none";
-            }
-
         }
     );
 }
 
+
 // ==========================
-// STOP BUTTON
+// STOP CAMERA
 // ==========================
 
 if (stopBtn) {
 
     stopBtn.addEventListener(
         "click",
-        async function() {
+        function () {
 
-            isSearching =
-                false;
+            if (!localStream) {
 
+                alert(
+                    "Camera is already stopped."
+                );
 
-            await removeFromQueue();
-
-
-            if (queueChannel) {
-
-                supabaseClient
-                    .removeChannel(
-                        queueChannel
-                    );
-
-                queueChannel =
-                    null;
+                return;
             }
 
+            localStream
+                .getTracks()
+                .forEach(
+                    function (track) {
 
-            if (signalingChannel) {
+                        track.stop();
+                    }
+                );
 
-                supabaseClient
-                    .removeChannel(
-                        signalingChannel
-                    );
+            localStream = null;
 
-                signalingChannel =
+            if (localVideo) {
+
+                localVideo.srcObject =
                     null;
+
+                localVideo.style.display =
+                    "none";
             }
 
+            if (localPlaceholder) {
 
-            closePeerConnection();
+                localPlaceholder.style.display =
+                    "flex";
+            }
 
+            if (remoteVideo) {
 
-            stopCamera();
+                remoteVideo.srcObject =
+                    null;
 
+                remoteVideo.style.display =
+                    "none";
+            }
 
-            matchedUserId =
-                null;
+            if (matchStatus) {
 
-            roomId =
-                null;
+                matchStatus.textContent =
+                    "Camera stopped";
+            }
 
-            isMuted =
-                false;
+            if (matchSubtext) {
 
-            isCameraOff =
-                false;
+                matchSubtext.textContent =
+                    "Press Start Chatting to start again.";
+            }
 
+            if (connectionStatus) {
+
+                connectionStatus.textContent =
+                    "● Not connected";
+            }
+
+            isMuted = false;
+            isCameraOff = false;
 
             if (micBtn) {
 
@@ -1701,33 +792,26 @@ if (stopBtn) {
                     "🎤 <span>Mute</span>";
             }
 
-
             if (cameraBtn) {
 
                 cameraBtn.innerHTML =
                     "📷 <span>Camera</span>";
             }
 
-
-            setStatus(
-
-                "Camera stopped",
-
-                "Press Start Chatting to start again.",
-
-                "● Not connected"
-
-            );
-
-
             addSystemMessage(
                 "Camera and microphone stopped."
             );
 
+            console.log(
+                "Camera and microphone stopped"
+            );
         }
     );
 }
 
+console.log(
+    "Camera controls initialized"
+);
 
 // ==========================
 // NEXT BUTTON
@@ -1737,88 +821,104 @@ if (nextBtn) {
 
     nextBtn.addEventListener(
         "click",
-        async function() {
+        function () {
+
+            console.log(
+                "NEXT BUTTON CLICKED"
+            );
 
             if (!localStream) {
 
                 alert(
-                    "Start the camera first."
+                    "Start Chatting first."
                 );
 
                 return;
             }
 
+            if (matchStatus) {
 
-            await removeFromQueue();
+                matchStatus.textContent =
+                    "Searching...";
+            }
 
+            if (matchSubtext) {
 
-            closePeerConnection();
+                matchSubtext.textContent =
+                    "Looking for a stranger...";
+            }
 
+            if (connectionStatus) {
 
-            matchedUserId =
-                null;
-
-            roomId =
-                null;
-
-            isSearching =
-                true;
-
-
-            setStatus(
-
-                "Searching...",
-
-                "Looking for a stranger...",
-
-                "● Searching"
-
-            );
-
+                connectionStatus.textContent =
+                    "● Searching";
+            }
 
             addSystemMessage(
                 "Searching for a new stranger..."
             );
 
+            setTimeout(
+                function () {
 
-            await startMatching();
+                    if (matchStatus) {
 
+                        matchStatus.textContent =
+                            "Waiting for a stranger...";
+                    }
+
+                    if (matchSubtext) {
+
+                        matchSubtext.textContent =
+                            "No stranger connected yet.";
+                    }
+
+                    if (connectionStatus) {
+
+                        connectionStatus.textContent =
+                            "● Waiting";
+                    }
+
+                },
+                2000
+            );
         }
     );
 }
 
 
 // ==========================
-// SUPABASE TEST
+// FINAL CHECK
 // ==========================
 
-async function testSupabase() {
+console.log(
+    "================================"
+);
 
-    const { error } =
-        await supabaseClient
+console.log(
+    "RandomChat script loaded successfully"
+);
 
-            .from("chat_messages")
+console.log(
+    "Start button:",
+    !!startBtn
+);
 
-            .select("*")
+console.log(
+    "Camera:",
+    !!localVideo
+);
 
-            .limit(1);
+console.log(
+    "Chat:",
+    !!messages
+);
 
+console.log(
+    "Supabase:",
+    !!supabaseClient
+);
 
-    if (error) {
-
-        console.error(
-            "Supabase connection error:",
-            error
-        );
-
-    }
-    else {
-
-        console.log(
-            "Supabase connected successfully."
-        );
-    }
-}
-
-
-testSupabase();
+console.log(
+    "================================"
+);

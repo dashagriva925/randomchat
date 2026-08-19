@@ -616,7 +616,7 @@ console.log(
 );
 // ==============================
 // RANDOMCHAT - PHASE 3
-// REAL-TIME TEXT CHAT
+// REAL-TIME CHAT - FIXED
 // ==============================
 
 const messageInput =
@@ -629,7 +629,7 @@ let chatChannel = null;
 
 
 // ==============================
-// USER ID
+// CHAT USER ID
 // ==============================
 
 function getChatUserId() {
@@ -656,20 +656,25 @@ function getChatUserId() {
 
 
 // ==============================
-// ADD CHAT MESSAGE
+// SHOW MESSAGE
 // ==============================
 
-function addChatMessage(
+function showChatMessage(
     text,
-    sender
+    isMine
 ) {
 
-    if (!messages) return;
+    if (!messages) {
+        console.error(
+            "Messages element not found"
+        );
+        return;
+    }
 
     const message =
         document.createElement("div");
 
-    if (sender === "me") {
+    if (isMine) {
 
         message.className =
             "user-message";
@@ -697,12 +702,100 @@ function addChatMessage(
 
 
 // ==============================
+// CREATE CHAT CHANNEL
+// ==============================
+
+function startChatChannel() {
+
+    if (chatChannel) {
+        return;
+    }
+
+    const channelName =
+        "randomchat-public-room";
+
+    chatChannel =
+        supabaseClient
+            .channel(channelName);
+
+
+    chatChannel.on(
+        "broadcast",
+        {
+            event: "chat-message"
+        },
+        function (payload) {
+
+            console.log(
+                "MESSAGE RECEIVED:",
+                payload
+            );
+
+            const message =
+                payload.payload;
+
+
+            if (!message) {
+                return;
+            }
+
+
+            // Ignore our own message
+            if (
+                message.sender_id ===
+                getChatUserId()
+            ) {
+                return;
+            }
+
+
+            showChatMessage(
+                message.text,
+                false
+            );
+
+        }
+    );
+
+
+    chatChannel.subscribe(
+        function (status) {
+
+            console.log(
+                "CHAT CHANNEL:",
+                status
+            );
+
+
+            if (
+                status ===
+                "SUBSCRIBED"
+            ) {
+
+                console.log(
+                    "CHAT READY"
+                );
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==============================
 // SEND MESSAGE
 // ==============================
 
 async function sendMessage() {
 
     if (!messageInput) {
+
+        console.error(
+            "messageInput not found"
+        );
+
         return;
     }
 
@@ -716,33 +809,70 @@ async function sendMessage() {
     }
 
 
-    const senderId =
-        getChatUserId();
-
-
-    const {
-        error
-    } =
-        await supabaseClient
-            .from("chat_messages")
-            .insert({
-
-                room_id:
-                    "public-chat",
-
-                sender_id:
-                    senderId,
-
-                message:
-                    text
-
-            });
-
-
-    if (error) {
+    if (!chatChannel) {
 
         console.error(
-            "Message error:",
+            "Chat channel not ready"
+        );
+
+        addSystemMessage(
+            "Chat is connecting. Try again."
+        );
+
+        startChatChannel();
+
+        return;
+    }
+
+
+    const messageData = {
+
+        sender_id:
+            getChatUserId(),
+
+        text:
+            text
+
+    };
+
+
+    console.log(
+        "SENDING MESSAGE:",
+        messageData
+    );
+
+
+    try {
+
+        await chatChannel.send({
+
+            type:
+                "broadcast",
+
+            event:
+                "chat-message",
+
+            payload:
+                messageData
+
+        });
+
+
+        // Show our own message
+        showChatMessage(
+            text,
+            true
+        );
+
+
+        messageInput.value =
+            "";
+
+
+    } catch (error) {
+
+        console.error(
+            "SEND MESSAGE ERROR:",
             error
         );
 
@@ -750,18 +880,7 @@ async function sendMessage() {
             "Message could not be sent."
         );
 
-        return;
     }
-
-
-    addChatMessage(
-        text,
-        "me"
-    );
-
-
-    messageInput.value =
-        "";
 
 }
 
@@ -808,71 +927,12 @@ if (messageInput) {
 
 
 // ==============================
-// REAL-TIME CHAT
+// START CHAT CHANNEL
 // ==============================
 
-function startChatRealtime() {
-
-    if (chatChannel) {
-        return;
-    }
-
-
-    chatChannel =
-        supabaseClient
-            .channel(
-                "randomchat-chat-" +
-                getChatUserId()
-            )
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "chat_messages"
-                },
-                function (payload) {
-
-                    const newMessage =
-                        payload.new;
-
-
-                    // Don't show our own message twice
-                    if (
-                        newMessage.sender_id ===
-                        getChatUserId()
-                    ) {
-
-                        return;
-
-                    }
-
-
-                    addChatMessage(
-                        newMessage.message,
-                        "stranger"
-                    );
-
-                }
-            )
-            .subscribe(
-                function (status) {
-
-                    console.log(
-                        "Chat realtime:",
-                        status
-                    );
-
-                }
-            );
-
-}
-
-
-// Start realtime chat
-startChatRealtime();
+startChatChannel();
 
 
 console.log(
-    "Phase 3 loaded successfully."
+    "Phase 3 chat loaded successfully."
 );

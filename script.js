@@ -614,3 +614,265 @@ if (stopBtn) {
 console.log(
     "Phase 2 loaded successfully."
 );
+// ==============================
+// RANDOMCHAT - PHASE 3
+// REAL-TIME TEXT CHAT
+// ==============================
+
+const messageInput =
+    document.getElementById("messageInput");
+
+const sendBtn =
+    document.getElementById("sendBtn");
+
+let chatChannel = null;
+
+
+// ==============================
+// USER ID
+// ==============================
+
+function getChatUserId() {
+
+    let id =
+        localStorage.getItem(
+            "randomchat_chat_user_id"
+        );
+
+    if (!id) {
+
+        id =
+            crypto.randomUUID();
+
+        localStorage.setItem(
+            "randomchat_chat_user_id",
+            id
+        );
+
+    }
+
+    return id;
+}
+
+
+// ==============================
+// ADD CHAT MESSAGE
+// ==============================
+
+function addChatMessage(
+    text,
+    sender
+) {
+
+    if (!messages) return;
+
+    const message =
+        document.createElement("div");
+
+    if (sender === "me") {
+
+        message.className =
+            "user-message";
+
+        message.textContent =
+            text;
+
+    } else {
+
+        message.className =
+            "user-message";
+
+        message.textContent =
+            "Stranger: " + text;
+
+    }
+
+    messages.appendChild(
+        message
+    );
+
+    messages.scrollTop =
+        messages.scrollHeight;
+}
+
+
+// ==============================
+// SEND MESSAGE
+// ==============================
+
+async function sendMessage() {
+
+    if (!messageInput) {
+        return;
+    }
+
+
+    const text =
+        messageInput.value.trim();
+
+
+    if (!text) {
+        return;
+    }
+
+
+    const senderId =
+        getChatUserId();
+
+
+    const {
+        error
+    } =
+        await supabaseClient
+            .from("chat_messages")
+            .insert({
+
+                room_id:
+                    "public-chat",
+
+                sender_id:
+                    senderId,
+
+                message:
+                    text
+
+            });
+
+
+    if (error) {
+
+        console.error(
+            "Message error:",
+            error
+        );
+
+        addSystemMessage(
+            "Message could not be sent."
+        );
+
+        return;
+    }
+
+
+    addChatMessage(
+        text,
+        "me"
+    );
+
+
+    messageInput.value =
+        "";
+
+}
+
+
+// ==============================
+// SEND BUTTON
+// ==============================
+
+if (sendBtn) {
+
+    sendBtn.addEventListener(
+        "click",
+        sendMessage
+    );
+
+}
+
+
+// ==============================
+// ENTER KEY
+// ==============================
+
+if (messageInput) {
+
+    messageInput.addEventListener(
+        "keydown",
+        function (event) {
+
+            if (
+                event.key ===
+                "Enter"
+            ) {
+
+                event.preventDefault();
+
+                sendMessage();
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==============================
+// REAL-TIME CHAT
+// ==============================
+
+function startChatRealtime() {
+
+    if (chatChannel) {
+        return;
+    }
+
+
+    chatChannel =
+        supabaseClient
+            .channel(
+                "randomchat-chat-" +
+                getChatUserId()
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "chat_messages"
+                },
+                function (payload) {
+
+                    const newMessage =
+                        payload.new;
+
+
+                    // Don't show our own message twice
+                    if (
+                        newMessage.sender_id ===
+                        getChatUserId()
+                    ) {
+
+                        return;
+
+                    }
+
+
+                    addChatMessage(
+                        newMessage.message,
+                        "stranger"
+                    );
+
+                }
+            )
+            .subscribe(
+                function (status) {
+
+                    console.log(
+                        "Chat realtime:",
+                        status
+                    );
+
+                }
+            );
+
+}
+
+
+// Start realtime chat
+startChatRealtime();
+
+
+console.log(
+    "Phase 3 loaded successfully."
+);

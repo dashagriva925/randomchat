@@ -300,3 +300,317 @@ testSupabase();
 console.log(
     "Phase 1 ready."
 );
+// ==============================
+// RANDOMCHAT - PHASE 2
+// MICROPHONE + CAMERA + STOP
+// ==============================
+
+let isMuted = false;
+let isCameraOff = false;
+
+const micBtn =
+    document.getElementById("micBtn");
+
+const cameraBtn =
+    document.getElementById("cameraBtn");
+
+const stopBtn =
+    document.getElementById("stopBtn");
+
+
+// ==============================
+// MICROPHONE
+// ==============================
+
+if (micBtn) {
+
+    micBtn.addEventListener(
+        "click",
+        function () {
+
+            if (!localStream) {
+
+                alert(
+                    "Start the camera first."
+                );
+
+                return;
+            }
+
+
+            const audioTracks =
+                localStream.getAudioTracks();
+
+
+            if (
+                audioTracks.length === 0
+            ) {
+
+                alert(
+                    "No microphone found."
+                );
+
+                return;
+            }
+
+
+            isMuted =
+                !isMuted;
+
+
+            audioTracks.forEach(
+                function (track) {
+
+                    track.enabled =
+                        !isMuted;
+
+                }
+            );
+
+
+            if (isMuted) {
+
+                micBtn.innerHTML =
+                    "🎤 <span>Unmute</span>";
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Microphone muted";
+
+                }
+
+            } else {
+
+                micBtn.innerHTML =
+                    "🎤 <span>Mute</span>";
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Camera connected";
+
+                }
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==============================
+// CAMERA ON / OFF
+// ==============================
+
+if (cameraBtn) {
+
+    cameraBtn.addEventListener(
+        "click",
+        function () {
+
+            if (!localStream) {
+
+                alert(
+                    "Start the camera first."
+                );
+
+                return;
+            }
+
+
+            const videoTracks =
+                localStream.getVideoTracks();
+
+
+            if (
+                videoTracks.length === 0
+            ) {
+
+                alert(
+                    "No camera found."
+                );
+
+                return;
+            }
+
+
+            isCameraOff =
+                !isCameraOff;
+
+
+            videoTracks.forEach(
+                function (track) {
+
+                    track.enabled =
+                        !isCameraOff;
+
+                }
+            );
+
+
+            if (isCameraOff) {
+
+                cameraBtn.innerHTML =
+                    "📷 <span>Camera Off</span>";
+
+
+                if (localVideo) {
+
+                    localVideo.style.display =
+                        "none";
+
+                }
+
+
+                if (localPlaceholder) {
+
+                    localPlaceholder.style.display =
+                        "flex";
+
+                }
+
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Camera off";
+
+                }
+
+            } else {
+
+                cameraBtn.innerHTML =
+                    "📷 <span>Camera</span>";
+
+
+                if (localVideo) {
+
+                    localVideo.style.display =
+                        "block";
+
+                }
+
+
+                if (localPlaceholder) {
+
+                    localPlaceholder.style.display =
+                        "none";
+
+                }
+
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Camera connected";
+
+                }
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==============================
+// STOP CAMERA + MICROPHONE
+// ==============================
+
+if (stopBtn) {
+
+    stopBtn.addEventListener(
+        "click",
+        function () {
+
+            if (!localStream) {
+
+                return;
+            }
+
+
+            localStream
+                .getTracks()
+                .forEach(
+                    function (track) {
+
+                        track.stop();
+
+                    }
+                );
+
+
+            localStream =
+                null;
+
+
+            if (localVideo) {
+
+                localVideo.srcObject =
+                    null;
+
+                localVideo.style.display =
+                    "none";
+
+            }
+
+
+            if (localPlaceholder) {
+
+                localPlaceholder.style.display =
+                    "flex";
+
+            }
+
+
+            isMuted =
+                false;
+
+            isCameraOff =
+                false;
+
+
+            if (micBtn) {
+
+                micBtn.innerHTML =
+                    "🎤 <span>Mute</span>";
+
+            }
+
+
+            if (cameraBtn) {
+
+                cameraBtn.innerHTML =
+                    "📷 <span>Camera</span>";
+
+            }
+
+
+            setStatus(
+                "Camera stopped",
+                "Press Start Chatting to start again.",
+                "● Not connected"
+            );
+
+
+            addSystemMessage(
+                "Camera and microphone stopped."
+            );
+
+
+            console.log(
+                "Camera and microphone stopped"
+            );
+
+        }
+    );
+
+}
+
+
+console.log(
+    "Phase 2 loaded successfully."
+);

@@ -1053,3 +1053,160 @@ connectChat();
 console.log(
     "PHASE 3 FIXED CHAT LOADED"
 );
+// ==========================================
+// PHASE 4 - RANDOM MATCHING
+// PART 1
+// ==========================================
+
+let currentUserId =
+    localStorage.getItem("randomchat_user_id");
+
+if (!currentUserId) {
+    currentUserId = crypto.randomUUID();
+
+    localStorage.setItem(
+        "randomchat_user_id",
+        currentUserId
+    );
+}
+
+
+// ==========================================
+// JOIN WAITING QUEUE
+// ==========================================
+
+async function joinWaitingQueue() {
+
+    console.log(
+        "Joining waiting queue..."
+    );
+
+    // Remove old entry first
+    await supabaseClient
+        .from("waiting_users")
+        .delete()
+        .eq(
+            "user_id",
+            currentUserId
+        );
+
+
+    // Add this user
+    const { error } =
+        await supabaseClient
+            .from("waiting_users")
+            .insert({
+
+                user_id:
+                    currentUserId
+
+            });
+
+
+    if (error) {
+
+        console.error(
+            "QUEUE INSERT ERROR:",
+            error
+        );
+
+        addSystemMessage(
+            "Could not join matching queue."
+        );
+
+        return false;
+    }
+
+
+    console.log(
+        "Successfully joined waiting queue."
+    );
+
+
+    return true;
+}
+
+
+// ==========================================
+// CHECK WAITING USERS
+// ==========================================
+
+async function getWaitingUsers() {
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("waiting_users")
+            .select("*")
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
+            );
+
+
+    if (error) {
+
+        console.error(
+            "QUEUE READ ERROR:",
+            error
+        );
+
+        return [];
+    }
+
+
+    return data || [];
+}
+
+
+// ==========================================
+// TEST MATCH SEARCH
+// ==========================================
+
+async function findWaitingUser() {
+
+    const users =
+        await getWaitingUsers();
+
+
+    console.log(
+        "WAITING USERS:",
+        users
+    );
+
+
+    const otherUser =
+        users.find(
+            user =>
+                user.user_id !==
+                currentUserId
+        );
+
+
+    if (!otherUser) {
+
+        console.log(
+            "No other user waiting."
+        );
+
+        return null;
+    }
+
+
+    console.log(
+        "FOUND OTHER USER:",
+        otherUser.user_id
+    );
+
+
+    return otherUser;
+}
+
+
+console.log(
+    "PHASE 4 PART 1 LOADED"
+);

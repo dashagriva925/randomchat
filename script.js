@@ -614,29 +614,35 @@ if (stopBtn) {
 console.log(
     "Phase 2 loaded successfully."
 );
-// ==============================
+ // ==========================================
 // RANDOMCHAT - PHASE 3
-// REAL-TIME CHAT - FIXED
-// ==============================
-
-const messageInput =
-    document.getElementById("messageInput");
-
-const sendBtn =
-    document.getElementById("sendBtn");
+// FIXED REAL-TIME CHAT
+// ==========================================
 
 let chatChannel = null;
+let chatReady = false;
 
 
-// ==============================
-// CHAT USER ID
-// ==============================
+// ==========================================
+// GET ELEMENTS
+// ==========================================
+
+const chatInput =
+    document.getElementById("messageInput");
+
+const chatSendButton =
+    document.getElementById("sendBtn");
+
+
+// ==========================================
+// UNIQUE USER ID
+// ==========================================
 
 function getChatUserId() {
 
     let id =
         localStorage.getItem(
-            "randomchat_chat_user_id"
+            "randomchat_user_id"
         );
 
     if (!id) {
@@ -645,112 +651,144 @@ function getChatUserId() {
             crypto.randomUUID();
 
         localStorage.setItem(
-            "randomchat_chat_user_id",
+            "randomchat_user_id",
             id
         );
-
     }
 
     return id;
 }
 
 
-// ==============================
+// ==========================================
 // SHOW MESSAGE
-// ==============================
+// ==========================================
 
-function showChatMessage(
+function displayChatMessage(
     text,
-    isMine
+    mine
 ) {
 
     if (!messages) {
+
         console.error(
-            "Messages element not found"
+            "Messages container not found"
         );
+
         return;
     }
+
 
     const message =
         document.createElement("div");
 
-    if (isMine) {
 
-        message.className =
-            "user-message";
+    message.className =
+        "user-message";
+
+
+    if (mine) {
 
         message.textContent =
             text;
 
     } else {
 
-        message.className =
-            "user-message";
-
         message.textContent =
             "Stranger: " + text;
 
     }
 
+
     messages.appendChild(
         message
     );
+
 
     messages.scrollTop =
         messages.scrollHeight;
 }
 
 
-// ==============================
-// CREATE CHAT CHANNEL
-// ==============================
+// ==========================================
+// START REALTIME CHAT
+// ==========================================
 
-function startChatChannel() {
+function connectChat() {
+
+    console.log(
+        "Connecting to chat..."
+    );
+
 
     if (chatChannel) {
-        return;
+
+        supabaseClient.removeChannel(
+            chatChannel
+        );
+
+        chatChannel =
+            null;
     }
 
-    const channelName =
-        "randomchat-public-room";
 
     chatChannel =
-        supabaseClient
-            .channel(channelName);
+        supabaseClient.channel(
+            "randomchat-main-room",
+            {
+                config: {
+                    broadcast: {
+                        self: true
+                    }
+                }
+            }
+        );
 
+
+    // ------------------------------
+    // RECEIVE MESSAGES
+    // ------------------------------
 
     chatChannel.on(
         "broadcast",
         {
-            event: "chat-message"
+            event: "message"
         },
         function (payload) {
 
             console.log(
-                "MESSAGE RECEIVED:",
+                "RECEIVED:",
                 payload
             );
 
-            const message =
+
+            const data =
                 payload.payload;
 
 
-            if (!message) {
+            if (!data) {
                 return;
             }
 
 
-            // Ignore our own message
+            const myId =
+                getChatUserId();
+
+
+            // Don't display our own
+            // broadcast twice
+
             if (
-                message.sender_id ===
-                getChatUserId()
+                data.sender_id ===
+                myId
             ) {
+
                 return;
             }
 
 
-            showChatMessage(
-                message.text,
+            displayChatMessage(
+                data.text,
                 false
             );
 
@@ -758,11 +796,15 @@ function startChatChannel() {
     );
 
 
+    // ------------------------------
+    // SUBSCRIBE
+    // ------------------------------
+
     chatChannel.subscribe(
         function (status) {
 
             console.log(
-                "CHAT CHANNEL:",
+                "CHAT STATUS:",
                 status
             );
 
@@ -772,8 +814,60 @@ function startChatChannel() {
                 "SUBSCRIBED"
             ) {
 
+                chatReady =
+                    true;
+
+
                 console.log(
-                    "CHAT READY"
+                    "CHAT CONNECTED!"
+                );
+
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Chat connected";
+
+                }
+
+            }
+
+
+            if (
+                status ===
+                "CHANNEL_ERROR"
+            ) {
+
+                chatReady =
+                    false;
+
+
+                console.error(
+                    "CHAT CHANNEL ERROR"
+                );
+
+
+                if (connectionStatus) {
+
+                    connectionStatus.textContent =
+                        "● Chat connection error";
+
+                }
+
+            }
+
+
+            if (
+                status ===
+                "TIMED_OUT"
+            ) {
+
+                chatReady =
+                    false;
+
+
+                console.error(
+                    "CHAT TIMED OUT"
                 );
 
             }
@@ -784,13 +878,18 @@ function startChatChannel() {
 }
 
 
-// ==============================
-// SEND MESSAGE
-// ==============================
+// ==========================================
+// SEND CHAT MESSAGE
+// ==========================================
 
-async function sendMessage() {
+async function sendChatMessage() {
 
-    if (!messageInput) {
+    console.log(
+        "SEND BUTTON PRESSED"
+    );
+
+
+    if (!chatInput) {
 
         console.error(
             "messageInput not found"
@@ -801,31 +900,36 @@ async function sendMessage() {
 
 
     const text =
-        messageInput.value.trim();
+        chatInput.value.trim();
 
 
     if (!text) {
-        return;
-    }
-
-
-    if (!chatChannel) {
-
-        console.error(
-            "Chat channel not ready"
-        );
-
-        addSystemMessage(
-            "Chat is connecting. Try again."
-        );
-
-        startChatChannel();
 
         return;
     }
 
 
-    const messageData = {
+    if (!chatChannel ||
+        !chatReady) {
+
+        console.log(
+            "Chat not ready"
+        );
+
+
+        if (connectionStatus) {
+
+            connectionStatus.textContent =
+                "● Connecting chat...";
+
+        }
+
+
+        return;
+    }
+
+
+    const data = {
 
         sender_id:
             getChatUserId(),
@@ -837,47 +941,64 @@ async function sendMessage() {
 
 
     console.log(
-        "SENDING MESSAGE:",
-        messageData
+        "SENDING:",
+        data
     );
 
 
     try {
 
-        await chatChannel.send({
+        const result =
+            await chatChannel.send({
 
-            type:
-                "broadcast",
+                type:
+                    "broadcast",
 
-            event:
-                "chat-message",
+                event:
+                    "message",
 
-            payload:
-                messageData
+                payload:
+                    data
 
-        });
+            });
+
+
+        console.log(
+            "SEND RESULT:",
+            result
+        );
+
+
+        if (
+            result &&
+            result !== "ok"
+        ) {
+
+            console.error(
+                "Broadcast error:",
+                result
+            );
+
+            return;
+        }
 
 
         // Show our own message
-        showChatMessage(
+        displayChatMessage(
             text,
             true
         );
 
 
-        messageInput.value =
+        chatInput.value =
             "";
 
 
     } catch (error) {
 
         console.error(
-            "SEND MESSAGE ERROR:",
+            "MESSAGE SEND ERROR:",
             error
-        );
-
-        addSystemMessage(
-            "Message could not be sent."
         );
 
     }
@@ -885,28 +1006,25 @@ async function sendMessage() {
 }
 
 
-// ==============================
+// ==========================================
 // SEND BUTTON
-// ==============================
+// ==========================================
 
-if (sendBtn) {
+if (chatSendButton) {
 
-    sendBtn.addEventListener(
-        "click",
-        sendMessage
-    );
+    chatSendButton.onclick =
+        sendChatMessage;
 
 }
 
 
-// ==============================
+// ==========================================
 // ENTER KEY
-// ==============================
+// ==========================================
 
-if (messageInput) {
+if (chatInput) {
 
-    messageInput.addEventListener(
-        "keydown",
+    chatInput.onkeydown =
         function (event) {
 
             if (
@@ -916,23 +1034,22 @@ if (messageInput) {
 
                 event.preventDefault();
 
-                sendMessage();
+                sendChatMessage();
 
             }
 
-        }
-    );
+        };
 
 }
 
 
-// ==============================
-// START CHAT CHANNEL
-// ==============================
+// ==========================================
+// START
+// ==========================================
 
-startChatChannel();
+connectChat();
 
 
 console.log(
-    "Phase 3 chat loaded successfully."
+    "PHASE 3 FIXED CHAT LOADED"
 );

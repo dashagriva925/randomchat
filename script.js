@@ -1210,3 +1210,79 @@ async function findWaitingUser() {
 console.log(
     "PHASE 4 PART 1 LOADED"
 );
+// ==========================================
+// PHASE 4 - PART 2
+// START RANDOM MATCHING
+// ==========================================
+
+let matchingInterval = null;
+
+async function startRandomMatching() {
+  console.log("PHASE 4 PART 2: Starting random matching...");
+
+  setStatus(
+    "Looking for a stranger...",
+    "Waiting for another user...",
+    "🟡 Searching"
+  );
+
+  // Join the waiting queue
+  const joined = await joinWaitingQueue();
+
+  if (!joined) {
+    console.error("Could not join waiting queue.");
+    setStatus(
+      "Matching error",
+      "Could not join the waiting queue.",
+      "🔴 Error"
+    );
+    return;
+  }
+
+  console.log("Joined waiting queue successfully.");
+
+  // Check for another user
+  await checkForMatch();
+
+  // Keep checking until a stranger is found
+  if (!matchingInterval) {
+    matchingInterval = setInterval(async () => {
+      await checkForMatch();
+    }, 2000);
+  }
+}
+
+
+// ==========================================
+// CHECK FOR A MATCH
+// ==========================================
+
+async function checkForMatch() {
+  try {
+    const stranger = await findWaitingUser();
+
+    if (!stranger) {
+      console.log("No stranger found yet...");
+      return;
+    }
+
+    console.log("STRANGER FOUND:", stranger);
+
+    // Stop checking
+    if (matchingInterval) {
+      clearInterval(matchingInterval);
+      matchingInterval = null;
+    }
+
+    setStatus(
+      "Stranger found!",
+      "You are now connected.",
+      "🟢 Connected"
+    );
+
+    addSystemMessage("You are now connected to a stranger.");
+
+  } catch (error) {
+    console.error("Matching error:", error);
+  }
+}

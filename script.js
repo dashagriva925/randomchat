@@ -214,6 +214,7 @@ async function startChat() {
         addSystemMessage(
             "Camera and microphone connected."
         );
+        startRandomMatching();
 
 
         console.log(

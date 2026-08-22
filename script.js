@@ -1286,3 +1286,144 @@ async function checkForMatch() {
     console.error("Matching error:", error);
   }
 }
+// ==========================================
+// PHASE 4 - PART 2
+// RANDOM MATCHING
+// ==========================================
+
+let matchingInterval = null;
+let matchedUserId = null;
+
+async function startRandomMatching() {
+
+    console.log(
+        "PHASE 4 PART 2: STARTING MATCHING"
+    );
+
+    const joined =
+        await joinWaitingQueue();
+
+    if (!joined) {
+
+        console.error(
+            "Could not join waiting queue."
+        );
+
+        return;
+    }
+
+    console.log(
+        "Waiting for another user..."
+    );
+
+    addSystemMessage(
+        "🔍 Searching for a stranger..."
+    );
+
+    // Check immediately
+    checkForMatch();
+
+    // Keep checking every 2 seconds
+    if (!matchingInterval) {
+
+        matchingInterval =
+            setInterval(
+                checkForMatch,
+                2000
+            );
+    }
+}
+
+
+// ==========================================
+// CHECK FOR STRANGER
+// ==========================================
+
+async function checkForMatch() {
+
+    try {
+
+        const stranger =
+            await findWaitingUser();
+
+        if (!stranger) {
+
+            return;
+        }
+
+
+        console.log(
+            "🎉 STRANGER FOUND:",
+            stranger.user_id
+        );
+
+
+        matchedUserId =
+            stranger.user_id;
+
+
+        // Stop checking
+        if (matchingInterval) {
+
+            clearInterval(
+                matchingInterval
+            );
+
+            matchingInterval =
+                null;
+        }
+
+
+        // Remove stranger from queue
+        const { error } =
+            await supabaseClient
+                .from("waiting_users")
+                .delete()
+                .eq(
+                    "user_id",
+                    matchedUserId
+                );
+
+
+        if (error) {
+
+            console.error(
+                "MATCH DELETE ERROR:",
+                error
+            );
+
+            return;
+        }
+
+
+        console.log(
+            "Users matched successfully."
+        );
+
+
+        addSystemMessage(
+            "🎉 Stranger found!"
+        );
+
+
+        setStatus(
+            "Stranger found!",
+            "You are now connected.",
+            "● Connected"
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "MATCHING ERROR:",
+            error
+        );
+
+    }
+}
+
+
+console.log(
+    "PHASE 4 PART 2 LOADED"
+);

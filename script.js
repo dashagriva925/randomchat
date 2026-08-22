@@ -1083,13 +1083,21 @@ async function joinWaitingQueue() {
     );
 
     // Remove old entry first
-    await supabaseClient
-        .from("waiting_users")
-        .delete()
-        .eq(
-            "user_id",
-            currentUserId
+    const { error: deleteError } =
+        await supabaseClient
+            .from("waiting_users")
+            .delete()
+            .eq(
+                "user_id",
+                currentUserId
+            );
+
+    if (deleteError) {
+        console.error(
+            "QUEUE OLD ENTRY DELETE ERROR:",
+            deleteError
         );
+    }
 
 
     // Add this user
@@ -1097,10 +1105,8 @@ async function joinWaitingQueue() {
         await supabaseClient
             .from("waiting_users")
             .insert({
-
                 user_id:
                     currentUserId
-
             });
 
 
@@ -1122,7 +1128,6 @@ async function joinWaitingQueue() {
     console.log(
         "Successfully joined waiting queue."
     );
-
 
     return true;
 }
@@ -1160,12 +1165,17 @@ async function getWaitingUsers() {
     }
 
 
+    console.log(
+        "WAITING USERS:",
+        data
+    );
+
     return data || [];
 }
 
 
 // ==========================================
-// TEST MATCH SEARCH
+// FIND ANOTHER USER
 // ==========================================
 
 async function findWaitingUser() {
@@ -1208,92 +1218,15 @@ async function findWaitingUser() {
 }
 
 
-console.log(
-    "PHASE 4 PART 1 LOADED"
-);
-// ==========================================
-// PHASE 4 - PART 2
-// START RANDOM MATCHING
-// ==========================================
-
-let matchingInterval = null;
-
-async function startRandomMatching() {
-  console.log("PHASE 4 PART 2: Starting random matching...");
-
-  setStatus(
-    "Looking for a stranger...",
-    "Waiting for another user...",
-    "🟡 Searching"
-  );
-
-  // Join the waiting queue
-  const joined = await joinWaitingQueue();
-
-  if (!joined) {
-    console.error("Could not join waiting queue.");
-    setStatus(
-      "Matching error",
-      "Could not join the waiting queue.",
-      "🔴 Error"
-    );
-    return;
-  }
-
-  console.log("Joined waiting queue successfully.");
-
-  // Check for another user
-  await checkForMatch();
-
-  // Keep checking until a stranger is found
-  if (!matchingInterval) {
-    matchingInterval = setInterval(async () => {
-      await checkForMatch();
-    }, 2000);
-  }
-}
-
-
-// ==========================================
-// CHECK FOR A MATCH
-// ==========================================
-
-async function checkForMatch() {
-  try {
-    const stranger = await findWaitingUser();
-
-    if (!stranger) {
-      console.log("No stranger found yet...");
-      return;
-    }
-
-    console.log("STRANGER FOUND:", stranger);
-
-    // Stop checking
-    if (matchingInterval) {
-      clearInterval(matchingInterval);
-      matchingInterval = null;
-    }
-
-    setStatus(
-      "Stranger found!",
-      "You are now connected.",
-      "🟢 Connected"
-    );
-
-    addSystemMessage("You are now connected to a stranger.");
-
-  } catch (error) {
-    console.error("Matching error:", error);
-  }
-}
 // ==========================================
 // PHASE 4 - PART 2
 // RANDOM MATCHING
 // ==========================================
 
 let matchingInterval = null;
+
 let matchedUserId = null;
+
 
 async function startRandomMatching() {
 
@@ -1301,8 +1234,11 @@ async function startRandomMatching() {
         "PHASE 4 PART 2: STARTING MATCHING"
     );
 
+
+    // Join waiting queue
     const joined =
         await joinWaitingQueue();
+
 
     if (!joined) {
 
@@ -1310,26 +1246,45 @@ async function startRandomMatching() {
             "Could not join waiting queue."
         );
 
+        setStatus(
+            "Matching error",
+            "Could not join the waiting queue.",
+            "🔴 Error"
+        );
+
         return;
     }
+
 
     console.log(
         "Waiting for another user..."
     );
 
+
+    setStatus(
+        "Looking for a stranger...",
+        "Waiting for another user...",
+        "🟡 Searching"
+    );
+
+
     addSystemMessage(
         "🔍 Searching for a stranger..."
     );
 
+
     // Check immediately
-    checkForMatch();
+    await checkForMatch();
+
 
     // Keep checking every 2 seconds
     if (!matchingInterval) {
 
         matchingInterval =
             setInterval(
-                checkForMatch,
+                async () => {
+                    await checkForMatch();
+                },
                 2000
             );
     }
@@ -1347,7 +1302,12 @@ async function checkForMatch() {
         const stranger =
             await findWaitingUser();
 
+
         if (!stranger) {
+
+            console.log(
+                "No stranger found yet..."
+            );
 
             return;
         }
@@ -1375,7 +1335,7 @@ async function checkForMatch() {
         }
 
 
-        // Remove stranger from queue
+        // Remove matched stranger
         const { error } =
             await supabaseClient
                 .from("waiting_users")
@@ -1410,7 +1370,7 @@ async function checkForMatch() {
         setStatus(
             "Stranger found!",
             "You are now connected.",
-            "● Connected"
+            "🟢 Connected"
         );
 
 
@@ -1420,7 +1380,6 @@ async function checkForMatch() {
             "MATCHING ERROR:",
             error
         );
-
     }
 }
 
